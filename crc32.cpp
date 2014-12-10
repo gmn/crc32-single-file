@@ -1,4 +1,4 @@
-/* g++ -O2 -Wall -o crc32 crc32.cpp */
+/* g++ -O2 -Wall -o crc32 crc32.cpp && strip crc32 */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -251,56 +251,41 @@ int file_get_contents( const char *fname, void **data )
     return (signed)total;
 }
 
-#if 0
-// copy file into memory, do checksum and then free
-int main( int argc, char ** argv ) {
-    if ( argc < 2 )
-        return 0;
 
-    unsigned int f_sz = get_filesize( argv[1] ) + 10;
-    void * p_data = malloc( f_sz );
-    memset( p_data, 0, f_sz );
-
-    int l_got = file_get_contents( argv[1], &p_data );
-
-    unsigned int crc32_uint = CRC32_BlockChecksum( p_data, l_got );
-
-    free( p_data );
-    
-    printf( "%0X    %s\n", crc32_uint, argv[1] );
-
-    return 0;
-}
-#endif
-
-// memory map file, do checksum and unmap
 int main( int argc, char ** argv ) 
 {
-    if ( argc < 2 )
+    if ( argc < 2 || strcmp( argv[1], "--help" ) == 0 ) {
+        fprintf( stderr, "usage: crc32 <file1> [ file2 file3 ... ]\n" );
         return -1;
-
-    // verify good path
-    FILE *fp = fopen ( argv[1], "r" );
-    if ( !fp ) {
-        fprintf( stderr, "file doesn't exist: \"%s\"\n", argv[1] );
-        return -2;
     }
-    fclose(fp);
 
-    // map and get checksum
-    int sz = 0;
-    unsigned char * p_data = memorymap_file_open( argv[1], &sz );
-    unsigned int crc32_uint = CRC32_BlockChecksum( p_data, sz );
-    memorymap_file_close( p_data, sz );
+    // for each valid file: memory map file, do checksum, then unmap
+    for ( int file_index = 1; file_index < argc; file_index++ )
+    {
+        // verify good path
+        FILE *fp = fopen ( argv[ file_index ], "r" );
+        if ( !fp ) {
+            fprintf( stderr, "file doesn't exist: \"%s\"\n", argv[ file_index ] );
+            return -2;
+        }
+        fclose(fp);
 
-    // output formatting
-    char buf[20];
-    memset(buf,0,20);
-    sprintf( &buf[1], "%0x", crc32_uint );
-    if ( strlen(&buf[1]) == 7 ) 
-        buf[0] = '0';
-    else
-        memmove( &buf[0], &buf[1], 9 );
-    printf( "%s    %s\n", buf, argv[1] );
+        // map and get checksum
+        int sz = 0;
+        unsigned char * p_data = memorymap_file_open( argv[ file_index ], &sz );
+        unsigned int crc32_uint = CRC32_BlockChecksum( p_data, sz );
+        memorymap_file_close( p_data, sz );
+
+        // output formatting
+        char buf[20];
+        memset(buf,0,20);
+        sprintf( &buf[1], "%0x", crc32_uint );
+        if ( strlen(&buf[1]) == 7 ) 
+            buf[0] = '0';
+        else
+            memmove( &buf[0], &buf[1], 9 );
+        printf( "%s    %s\n", buf, argv[ file_index ] );
+    }
+
     return 0;
 }
